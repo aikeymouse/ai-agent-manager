@@ -1,0 +1,6 @@
+{
+  "name": "ollama",
+  "description": "AI assistant powered by Ollama",
+  "model": "llama3.1:8b",
+  "timeout": 120
+}

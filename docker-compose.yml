@@ -1,0 +1,73 @@
+services:
+  agents-sandbox:
+    build: ./agents-sandbox
+    container_name: ai-agent-sandbox
+    volumes:
+      - ./agents:/workspace/agents:ro
+      - agent-venvs:/workspace/venvs
+      - agent-logs:/workspace/logs
+    networks:
+      - agent-network
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    container_name: ai-agent-backend
+    ports:
+      - "5500:5500"
+    volumes:
+      - ./agents:/app/agents:ro
+      - ./backend:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_DB=agent_manager
+      - POSTGRES_USER=agent_user
+      - POSTGRES_PASSWORD=agent_pass
+      - AGENTS_PATH=/app/agents
+      - SANDBOX_CONTAINER=ai-agent-sandbox
+    depends_on:
+      - postgres
+      - agents-sandbox
+    networks:
+      - agent-network
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: ai-agent-postgres
+    environment:
+      - POSTGRES_DB=agent_manager
+      - POSTGRES_USER=agent_user
+      - POSTGRES_PASSWORD=agent_pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - agent-network
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: ai-agent-frontend
+    ports:
+      - "8500:8500"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:5500
+      - VITE_WS_URL=ws://localhost:5500
+    depends_on:
+      - backend
+    networks:
+      - agent-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  agent-venvs:
+  agent-logs:
+
+networks:
+  agent-network:
+    driver: bridge
