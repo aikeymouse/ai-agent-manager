@@ -1,5 +1,5 @@
 {
-  "name": "ollama-generate",
+  "name": "ollama_generate",
   "description": "AI generate assistant powered by Ollama",
   "model": "llama3.1:8b",
   "timeout": 120,
