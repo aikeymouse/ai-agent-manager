@@ -88,6 +88,31 @@ class BaseAgent:
         except Exception as e:
             pass  # Don't log errors from logging to avoid recursion
     
+    def get_llm_request_body(self, model: str, stream: bool = True, **kwargs) -> dict:
+        """
+        Build and log LLM request body with conversation history.
+        
+        Args:
+            model: The model name to use
+            stream: Whether to stream the response
+            **kwargs: Additional fields to include in request body
+            
+        Returns:
+            dict: The complete request body
+        """
+        request_body = {
+            "model": model,
+            "messages": self.get_history(),
+            "stream": stream,
+            **kwargs
+        }
+        self.log_request_body(request_body)
+        return request_body
+    
+    def log_request_body(self, request_body: dict, label: str = "Request body"):
+        """Log request body as formatted JSON"""
+        print(f"[{self.agent_name}] {label}: {json.dumps(request_body, indent=2)}")
+    
     async def send_message(self, content: str):
         """Send message to user via WebSocket"""
         if not self.websocket:

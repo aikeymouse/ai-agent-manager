@@ -62,15 +62,13 @@ class OllamaAgent(BaseAgent):
     
     async def _ollama_stream_generator(self):
         """Generator that yields streaming chunks from Ollama"""
+        request_body = self.get_llm_request_body(self.model, stream=True)
+        
         async with httpx.AsyncClient(timeout=httpx.Timeout(self.timeout, connect=10.0)) as client:
             async with client.stream(
                 "POST",
                 f"{self.base_url}{self.model_endpoint}",
-                json={
-                    "model": self.model,
-                    "messages": self.get_history(),
-                    "stream": True
-                }
+                json=request_body
             ) as response:
                 if response.status_code != 200:
                     raise Exception(f"Ollama returned status {response.status_code}")
@@ -90,14 +88,12 @@ class OllamaAgent(BaseAgent):
         """Handle non-streaming Ollama response"""
         await self.send_typing(True)
         
+        request_body = self.get_llm_request_body(self.model, stream=False)
+        
         async with httpx.AsyncClient(timeout=httpx.Timeout(self.timeout, connect=10.0)) as client:
             response = await client.post(
                 f"{self.base_url}{self.model_endpoint}",
-                json={
-                    "model": self.model,
-                    "messages": self.get_history(),
-                    "stream": False
-                }
+                json=request_body
             )
             
             await self.send_typing(False)
