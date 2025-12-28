@@ -354,6 +354,15 @@ async def websocket_endpoint(websocket: WebSocket, session_id: int, db: Session 
                     "timestamp": msg.timestamp.isoformat()
                 })
             
+            elif message_type == "agent_message_stream":
+                # Stream partial response without saving (for real-time updates)
+                await connection_manager.send_message(session_id, {
+                    "type": "message_stream",
+                    "role": "agent",
+                    "content": content,
+                    "timestamp": datetime.now().isoformat()
+                })
+            
             elif message_type == "agent_log":
                 # Forward log message to UI without saving to database
                 await connection_manager.send_message(session_id, {

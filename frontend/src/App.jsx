@@ -62,11 +62,57 @@ function App() {
       const data = JSON.parse(event.data);
       
       if (data.type === 'message') {
-        setMessages(prev => [...prev, {
-          role: data.role,
-          content: data.content,
-          timestamp: data.timestamp
-        }]);
+        setMessages(prev => {
+          const newMessages = [...prev];
+          const lastIndex = newMessages.length - 1;
+          
+          // Check if last message is streaming - if so, finalize it
+          if (lastIndex >= 0 && newMessages[lastIndex].role === 'agent' && newMessages[lastIndex].isStreaming) {
+            // Update the streaming message to final state
+            newMessages[lastIndex] = {
+              role: data.role,
+              content: data.content,
+              timestamp: data.timestamp,
+              isStreaming: false
+            };
+            return newMessages;
+          } else {
+            // Add new message (non-streaming case)
+            return [...prev, {
+              role: data.role,
+              content: data.content,
+              timestamp: data.timestamp
+            }];
+          }
+        });
+      } else if (data.type === 'message_stream') {
+        // Update streaming message content
+        setMessages(prev => {
+          const newMessages = [...prev];
+          const lastIndex = newMessages.length - 1;
+          
+          // Check if last message is an agent message being streamed
+          if (lastIndex >= 0 && newMessages[lastIndex].role === 'agent' && newMessages[lastIndex].isStreaming) {
+            // Update existing streaming message
+            newMessages[lastIndex] = {
+              ...newMessages[lastIndex],
+              content: data.content
+            };
+          } else {
+            // Create new streaming message
+            newMessages.push({
+              role: data.role,
+              content: data.content,
+              timestamp: data.timestamp,
+              isStreaming: true
+            });
+          }
+          
+          return newMessages;
+        });
+        
+        // Hide typing indicator once streaming starts
+        setIsTyping(false);
       } else if (data.type === 'log') {
         setMessages(prev => [...prev, {
           role: 'system',
@@ -75,6 +121,7 @@ function App() {
         }]);
       } else if (data.type === 'typing') {
         setIsTyping(data.is_typing);
+        // Don't modify isStreaming flag here - let the final message handle it
       } else if (data.type === 'heartbeat') {
         // Reset heartbeat timeout on each heartbeat
         if (heartbeatTimeoutRef.current) {
@@ -414,7 +461,16 @@ function App() {
                       style={isSystemLog && isTruncated ? { cursor: 'pointer' } : {}}
                     >
                       {msg.role === 'agent' ? (
-                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                        <>
+                          <ReactMarkdown>{msg.content}</ReactMarkdown>
+                          {msg.isStreaming && (
+                            <span className="typing-dots inline">
+                              <span></span>
+                              <span></span>
+                              <span></span>
+                            </span>
+                          )}
+                        </>
                       ) : isSystemLog && isTruncated && !isExpanded ? (
                         <>
                           {displayContent}

@@ -38,6 +38,7 @@ class BaseAgent:
         self.backend_host = os.getenv("BACKEND_HOST", "localhost")
         self.backend_port = os.getenv("BACKEND_PORT", "8000")
         self.websocket = None
+        self.message_queue = asyncio.Queue()
         
     async def connect(self):
         """Connect to backend WebSocket"""
@@ -82,6 +83,19 @@ class BaseAgent:
         except Exception as e:
             print(f"[{self.agent_name}] Error sending message: {e}", file=sys.stderr, flush=True)
     
+    async def send_message_stream(self, content: str):
+        """Send streaming message update (doesn't save to database)"""
+        if not self.websocket:
+            return
+        
+        try:
+            await self.websocket.send(json.dumps({
+                "type": "agent_message_stream",
+                "content": content
+            }))
+        except Exception as e:
+            pass  # Silently fail for streaming updates
+    
     async def send_typing(self, is_typing: bool = True):
         """Send typing indicator status"""
         if not self.websocket:
@@ -108,23 +122,37 @@ class BaseAgent:
             pass  # Don't log heartbeat errors
     
     async def receive_message(self):
-        """Receive message from user via WebSocket"""
-        if not self.websocket:
-            return None
-        
+        """Receive message from user via WebSocket (non-blocking)"""
         try:
-            message = await self.websocket.recv()
-            data = json.loads(message)
-            
-            if data.get("type") == "user_message":
-                content = data.get("content", "")
-                print(f"[{self.agent_name}] Received: {content}", flush=True)
-                return content
-            
+            # Try to get a message from the queue without blocking
+            message = await asyncio.wait_for(self.message_queue.get(), timeout=0.1)
+            return message
+        except asyncio.TimeoutError:
             return None
-        except Exception as e:
-            print(f"[{self.agent_name}] Error receiving message: {e}", file=sys.stderr, flush=True)
-            return None
+    
+    async def _message_receiver_loop(self):
+        """Background task to receive messages and put them in queue"""
+        try:
+            while True:
+                if not self.websocket:
+                    await asyncio.sleep(0.1)
+                    continue
+                
+                try:
+                    message = await self.websocket.recv()
+                    data = json.loads(message)
+                    
+                    if data.get("type") == "user_message":
+                        content = data.get("content", "")
+                        print(f"[{self.agent_name}] Received: {content}", flush=True)
+                        await self.message_queue.put(content)
+                except websockets.exceptions.ConnectionClosed as e:
+                    print(f"[{self.agent_name}] WebSocket connection closed: {e}", file=sys.stderr, flush=True)
+                    break
+                except Exception as e:
+                    print(f"[{self.agent_name}] Error receiving message: {e}", file=sys.stderr, flush=True)
+        except asyncio.CancelledError:
+            pass  # Normal cancellation
     
     async def initialize(self):
         """Override this method to initialize your agent"""
@@ -148,13 +176,14 @@ class BaseAgent:
             # Send welcome message
             await self.send_message(f"Hello! I'm {self.agent_name} agent. How can I help you?")
             
-            # Start heartbeat task
+            # Start background tasks
             heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+            receiver_task = asyncio.create_task(self._message_receiver_loop())
             
             # Main message loop
             try:
                 while True:
-                    # Receive user message
+                    # Receive user message (non-blocking)
                     user_message = await self.receive_message()
                     
                     if user_message:
@@ -168,10 +197,15 @@ class BaseAgent:
                     # Small delay to prevent tight loop
                     await asyncio.sleep(0.1)
             finally:
-                # Cancel heartbeat task
+                # Cancel background tasks
                 heartbeat_task.cancel()
+                receiver_task.cancel()
                 try:
                     await heartbeat_task
+                except asyncio.CancelledError:
+                    pass
+                try:
+                    await receiver_task
                 except asyncio.CancelledError:
                     pass
         

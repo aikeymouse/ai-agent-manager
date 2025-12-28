@@ -520,12 +520,25 @@ body {
   padding: 0.5rem 0;
 }
 
+.typing-dots.inline {
+  display: inline-flex;
+  gap: 0.3rem;
+  padding: 0;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+}
+
 .typing-dots span {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: #667eea;
   animation: typing 1.4s infinite;
+}
+
+.typing-dots.inline span {
+  width: 6px;
+  height: 6px;
 }
 
 .typing-dots span:nth-child(2) {

@@ -5,5 +5,6 @@
   "timeout": 120,
   "base_url": "http://host.docker.internal:11434",
   "model_endpoint": "/api/chat",
-  "test_endpoint": "/api/show"
+  "test_endpoint": "/api/show",
+  "stream": true
 }

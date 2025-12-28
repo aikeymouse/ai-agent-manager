@@ -21,6 +21,7 @@ class OllamaAgent(BaseAgent):
         self.test_endpoint = config.get("test_endpoint", "/api/show")
         self.model = config.get("model", "llama3.1:8b")
         self.timeout = config.get("timeout", 60)
+        self.stream = config.get("stream", False)
         self.conversation_history = []
     
     def _load_config(self):
@@ -79,34 +80,86 @@ class OllamaAgent(BaseAgent):
         })
         
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(
-                    f"{self.base_url}{self.model_endpoint}",
-                    json={
-                        "model": self.model,
-                        "messages": self.conversation_history,
-                        "stream": False
-                    }
-                )
-                
-                if response.status_code == 200:
-                    result = response.json()
-                    assistant_message = result["message"]["content"]
-                    
-                    # Add assistant response to history
-                    self.conversation_history.append({
-                        "role": "assistant",
-                        "content": assistant_message
-                    })
-                    
-                    # Hide typing indicator
-                    await self.send_typing(False)
-                    
-                    return assistant_message
+            async with httpx.AsyncClient(timeout=httpx.Timeout(self.timeout, connect=10.0)) as client:
+                if self.stream:
+                    # Streaming response
+                    print(f"[{self.agent_name}] Starting streaming response...", flush=True)
+                    full_response = ""
+                    try:
+                        async with client.stream(
+                            "POST",
+                            f"{self.base_url}{self.model_endpoint}",
+                            json={
+                                "model": self.model,
+                                "messages": self.conversation_history,
+                                "stream": True
+                            }
+                        ) as response:
+                            if response.status_code == 200:
+                                async for line in response.aiter_lines():
+                                    if line:
+                                        try:
+                                            chunk = json.loads(line)
+                                            if not chunk.get("done"):
+                                                content = chunk.get("message", {}).get("content", "")
+                                                if content:
+                                                    full_response += content
+                                                    # Send partial response to update UI
+                                                    try:
+                                                        await self.send_message_stream(full_response)
+                                                    except Exception as e:
+                                                        print(f"[{self.agent_name}] Error sending stream: {e}", flush=True)
+                                                        raise
+                                        except json.JSONDecodeError:
+                                            continue
+                                
+                                # Add complete response to history
+                                print(f"[{self.agent_name}] Streaming complete, received {len(full_response)} characters", flush=True)
+                                self.conversation_history.append({
+                                    "role": "assistant",
+                                    "content": full_response
+                                })
+                                
+                                # Hide typing indicator (signals end of stream)
+                                await self.send_typing(False)
+                                
+                                # Return response - base agent will send and save it
+                                return full_response
+                            else:
+                                await self.send_typing(False)
+                                return f"Error: Ollama returned status {response.status_code}"
+                    except httpx.ReadTimeout:
+                        await self.send_typing(False)
+                        return f"Error: Request timed out after {self.timeout} seconds"
                 else:
-                    # Hide typing indicator
-                    await self.send_typing(False)
-                    return f"Error: Ollama returned status {response.status_code}"
+                    # Non-streaming response
+                    response = await client.post(
+                        f"{self.base_url}{self.model_endpoint}",
+                        json={
+                            "model": self.model,
+                            "messages": self.conversation_history,
+                            "stream": False
+                        }
+                    )
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        assistant_message = result["message"]["content"]
+                        
+                        # Add assistant response to history
+                        self.conversation_history.append({
+                            "role": "assistant",
+                            "content": assistant_message
+                        })
+                        
+                        # Hide typing indicator
+                        await self.send_typing(False)
+                        
+                        return assistant_message
+                    else:
+                        # Hide typing indicator
+                        await self.send_typing(False)
+                        return f"Error: Ollama returned status {response.status_code}"
                 
         except Exception as e:
             # Hide typing indicator on error
