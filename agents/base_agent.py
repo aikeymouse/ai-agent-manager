@@ -109,6 +109,47 @@ class BaseAgent:
         except Exception as e:
             pass  # Silently fail
     
+    async def stream_response(self, response_generator, save_to_history=None):
+        """
+        Helper to handle streaming responses from LLM.
+        
+        Args:
+            response_generator: Async generator that yields response chunks
+            save_to_history: Optional callback to save complete response (e.g., to conversation history)
+            
+        Returns:
+            Complete response string, or None if streaming was used
+        """
+        # Show typing indicator
+        await self.send_typing(True)
+        
+        full_response = ""
+        
+        try:
+            # Collect and stream chunks
+            async for chunk in response_generator:
+                if chunk:
+                    full_response += chunk
+                    await self.send_message_stream(full_response)
+            
+            # Save to history if callback provided
+            if save_to_history:
+                save_to_history(full_response)
+            
+            # Hide typing indicator (signals end of stream)
+            await self.send_typing(False)
+            
+            # Save to database without broadcasting (already streamed)
+            await self.save_message(full_response)
+            
+            # Return None to prevent base agent from sending again
+            return None
+            
+        except Exception as e:
+            # Hide typing indicator on error
+            await self.send_typing(False)
+            raise
+    
     async def send_typing(self, is_typing: bool = True):
         """Send typing indicator status"""
         if not self.websocket:
