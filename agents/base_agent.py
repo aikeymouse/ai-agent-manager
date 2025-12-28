@@ -96,6 +96,19 @@ class BaseAgent:
         except Exception as e:
             pass  # Silently fail for streaming updates
     
+    async def save_message(self, content: str):
+        """Save message to database without broadcasting"""
+        if not self.websocket:
+            return
+        
+        try:
+            await self.websocket.send(json.dumps({
+                "type": "agent_message_save",
+                "content": content
+            }))
+        except Exception as e:
+            pass  # Silently fail
+    
     async def send_typing(self, is_typing: bool = True):
         """Send typing indicator status"""
         if not self.websocket:

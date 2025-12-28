@@ -363,6 +363,17 @@ async def websocket_endpoint(websocket: WebSocket, session_id: int, db: Session 
                     "timestamp": datetime.now().isoformat()
                 })
             
+            elif message_type == "agent_message_save":
+                # Save message to database without broadcasting (already streamed)
+                msg = ChatMessage(
+                    session_id=session_id,
+                    role="agent",
+                    content=content
+                )
+                db.add(msg)
+                db.commit()
+                logger.info(f"Saved streamed message for session {session_id}")
+            
             elif message_type == "agent_log":
                 # Forward log message to UI without saving to database
                 await connection_manager.send_message(session_id, {

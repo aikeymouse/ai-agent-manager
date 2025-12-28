@@ -121,7 +121,23 @@ function App() {
         }]);
       } else if (data.type === 'typing') {
         setIsTyping(data.is_typing);
-        // Don't modify isStreaming flag here - let the final message handle it
+        
+        // When typing stops after streaming, finalize the message
+        if (!data.is_typing) {
+          setMessages(prev => {
+            const newMessages = [...prev];
+            const lastIndex = newMessages.length - 1;
+            
+            if (lastIndex >= 0 && newMessages[lastIndex].isStreaming) {
+              newMessages[lastIndex] = {
+                ...newMessages[lastIndex],
+                isStreaming: false
+              };
+            }
+            
+            return newMessages;
+          });
+        }
       } else if (data.type === 'heartbeat') {
         // Reset heartbeat timeout on each heartbeat
         if (heartbeatTimeoutRef.current) {

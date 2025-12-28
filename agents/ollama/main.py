@@ -123,8 +123,11 @@ class OllamaAgent(BaseAgent):
                                 # Hide typing indicator (signals end of stream)
                                 await self.send_typing(False)
                                 
-                                # Return response - base agent will send and save it
-                                return full_response
+                                # Save to database without broadcasting (already streamed)
+                                await self.save_message(full_response)
+                                
+                                # Return None to prevent base agent from sending again
+                                return None
                             else:
                                 await self.send_typing(False)
                                 return f"Error: Ollama returned status {response.status_code}"
