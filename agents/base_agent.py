@@ -106,6 +106,11 @@ class BaseAgent:
             "stream": stream,
             **kwargs
         }
+        
+        # Add options from config if present
+        if "options" in self.config:
+            request_body["options"] = self.config["options"]
+        
         self.log_request_body(request_body)
         return request_body
     
