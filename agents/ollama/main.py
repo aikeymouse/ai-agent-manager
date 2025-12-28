@@ -15,12 +15,12 @@ class OllamaAgent(BaseAgent):
     
     def __init__(self):
         super().__init__()
-        self.base_url = self.config.get("base_url", "http://host.docker.internal:11434")
-        self.model_endpoint = self.config.get("model_endpoint", "/api/chat")
-        self.test_endpoint = self.config.get("test_endpoint", "/api/show")
-        self.model = self.config.get("model", "llama3.1:8b")
-        self.timeout = self.config.get("timeout", 60)
-        self.stream = self.config.get("stream", False)
+        self.base_url = self.config.get("base_url")
+        self.model_endpoint = self.config.get("model_endpoint")
+        self.test_endpoint = self.config.get("test_endpoint")
+        self.model = self.config.get("model")
+        self.timeout = self.config.get("timeout")
+        self.stream = self.config.get("stream")
         print(f"[{self.agent_name}] Config - model: {self.model}, timeout: {self.timeout}s")
         
     async def initialize(self):
