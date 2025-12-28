@@ -15,36 +15,13 @@ class OllamaAgent(BaseAgent):
     
     def __init__(self):
         super().__init__()
-        config = self._load_config()
-        self.base_url = config.get("base_url", "http://host.docker.internal:11434")
-        self.model_endpoint = config.get("model_endpoint", "/api/chat")
-        self.test_endpoint = config.get("test_endpoint", "/api/show")
-        self.model = config.get("model", "llama3.1:8b")
-        self.timeout = config.get("timeout", 60)
-        self.stream = config.get("stream", False)
-    
-    def _load_config(self):
-        """Load configuration from agent_metadata.json"""
-        try:
-            config_path = "/workspace/agents/ollama/agent_metadata.json"
-            if os.path.exists(config_path):
-                with open(config_path, 'r') as f:
-                    config = json.load(f)
-                    model = config.get("model", "llama3.1:8b")
-                    timeout = config.get("timeout", 60)
-                    print(f"[{self.agent_name}] Loaded config - model: {model}, timeout: {timeout}s")
-                    return config
-        except Exception as e:
-            print(f"[{self.agent_name}] Error loading config: {e}, using defaults")
-        
-        # Default config
-        return {
-            "model": "llama3.1:8b", 
-            "timeout": 60, 
-            "base_url": "http://host.docker.internal:11434",
-            "model_endpoint": "/api/chat",
-            "test_endpoint": "/api/show"
-        }
+        self.base_url = self.config.get("base_url", "http://host.docker.internal:11434")
+        self.model_endpoint = self.config.get("model_endpoint", "/api/chat")
+        self.test_endpoint = self.config.get("test_endpoint", "/api/show")
+        self.model = self.config.get("model", "llama3.1:8b")
+        self.timeout = self.config.get("timeout", 60)
+        self.stream = self.config.get("stream", False)
+        print(f"[{self.agent_name}] Config - model: {self.model}, timeout: {self.timeout}s")
         
     async def initialize(self):
         """Initialize the agent"""

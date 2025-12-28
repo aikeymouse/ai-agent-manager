@@ -40,6 +40,25 @@ class BaseAgent:
         self.websocket = None
         self.message_queue = asyncio.Queue()
         self.conversation_history = []
+        self.config = self.load_config()
+    
+    def load_config(self):
+        """Load configuration from agent_metadata.json in agent's directory"""
+        try:
+            # Determine agent directory based on the agent name
+            agent_dir = f"/workspace/agents/{self.agent_name}"
+            config_path = f"{agent_dir}/agent_metadata.json"
+            
+            if os.path.exists(config_path):
+                with open(config_path, 'r') as f:
+                    config = json.load(f)
+                    print(f"[{self.agent_name}] Loaded config from {config_path}")
+                    return config
+        except Exception as e:
+            print(f"[{self.agent_name}] Error loading config: {e}, using empty config")
+        
+        # Return empty config if not found or error
+        return {}
         
     async def connect(self):
         """Connect to backend WebSocket"""
