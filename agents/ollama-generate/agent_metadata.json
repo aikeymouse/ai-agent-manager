@@ -1,12 +1,13 @@
 {
-  "name": "ollama",
-  "description": "AI chat assistant powered by Ollama",
+  "name": "ollama-generate",
+  "description": "AI generate assistant powered by Ollama",
   "model": "llama3.1:8b",
   "timeout": 120,
   "base_url": "http://host.docker.internal:11434",
-  "model_endpoint": "/api/chat",
+  "model_endpoint": "/api/generate",
   "test_endpoint": "/api/show",
   "stream": true,
+  "system_prompt": "You are a helpful AI assistant.",
   "options": {
     "temperature": 0.7,
     "top_p": 0.9,
