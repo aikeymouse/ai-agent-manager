@@ -15,8 +15,10 @@ class OllamaAgent(BaseAgent):
     
     def __init__(self):
         super().__init__()
-        self.ollama_url = "http://host.docker.internal:11434/api/generate"
         config = self._load_config()
+        self.base_url = config.get("base_url", "http://host.docker.internal:11434")
+        self.model_endpoint = config.get("model_endpoint", "/api/chat")
+        self.test_endpoint = config.get("test_endpoint", "/api/show")
         self.model = config.get("model", "llama3.1:8b")
         self.timeout = config.get("timeout", 60)
         self.conversation_history = []
@@ -36,7 +38,13 @@ class OllamaAgent(BaseAgent):
             print(f"[{self.agent_name}] Error loading config: {e}, using defaults")
         
         # Default config
-        return {"model": "llama3.1:8b", "timeout": 60}
+        return {
+            "model": "llama3.1:8b", 
+            "timeout": 60, 
+            "base_url": "http://host.docker.internal:11434",
+            "model_endpoint": "/api/chat",
+            "test_endpoint": "/api/show"
+        }
         
     async def initialize(self):
         """Initialize the agent"""
@@ -46,18 +54,20 @@ class OllamaAgent(BaseAgent):
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.post(
-                    "http://host.docker.internal:11434/api/tags"
+                    f"{self.base_url}{self.test_endpoint}",
+                    json={"name": self.model}
                 )
                 if response.status_code == 200:
-                    print(f"[{self.agent_name}] Successfully connected to Ollama")
+                    model_info = response.json()
+                    print(f"[{self.agent_name}] Successfully connected to Ollama - Model: {model_info.get('details', {}).get('family', 'unknown')}")
                 else:
                     print(f"[{self.agent_name}] Warning: Ollama connection issue (status {response.status_code})")
         except Exception as e:
             print(f"[{self.agent_name}] Warning: Could not connect to Ollama: {e}")
     
     async def process_message(self, message: str) -> str:
-        """Process incoming messages using Ollama"""
-        print(f"[{self.agent_name}] Processing message with Ollama...")
+        """Process incoming messages using Ollama chat API"""
+        print(f"[{self.agent_name}] Processing message with Ollama chat API...")
         
         # Show typing indicator
         await self.send_typing(True)
@@ -68,46 +78,35 @@ class OllamaAgent(BaseAgent):
             "content": message
         })
         
-        # Build prompt with conversation history
-        prompt = self._build_prompt()
-        
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                # Stream the response from Ollama
-                full_response = ""
-                
-                async with client.stream(
-                    "POST",
-                    self.ollama_url,
+                response = await client.post(
+                    f"{self.base_url}{self.model_endpoint}",
                     json={
                         "model": self.model,
-                        "prompt": prompt,
+                        "messages": self.conversation_history,
                         "stream": False
                     }
-                ) as response:
-                    if response.status_code == 200:
-                        data = await response.aread()
-                        import json
-                        result = json.loads(data)
-                        full_response = result.get("response", "")
-                    else:
-                        full_response = f"Error: Ollama returned status {response.status_code}"
+                )
                 
-                # Hide typing indicator
-                await self.send_typing(False)
-                
-                # Add assistant response to history
-                if full_response:
+                if response.status_code == 200:
+                    result = response.json()
+                    assistant_message = result["message"]["content"]
+                    
+                    # Add assistant response to history
                     self.conversation_history.append({
                         "role": "assistant",
-                        "content": full_response
+                        "content": assistant_message
                     })
-                
-                # Keep conversation history manageable (last 10 exchanges)
-                if len(self.conversation_history) > 20:
-                    self.conversation_history = self.conversation_history[-20:]
-                
-                return full_response
+                    
+                    # Hide typing indicator
+                    await self.send_typing(False)
+                    
+                    return assistant_message
+                else:
+                    # Hide typing indicator
+                    await self.send_typing(False)
+                    return f"Error: Ollama returned status {response.status_code}"
                 
         except Exception as e:
             # Hide typing indicator on error
@@ -116,21 +115,6 @@ class OllamaAgent(BaseAgent):
             error_msg = f"Error communicating with Ollama: {str(e)}"
             print(f"[{self.agent_name}] {error_msg}")
             return error_msg
-    
-    def _build_prompt(self) -> str:
-        """Build prompt from conversation history"""
-        prompt_parts = []
-        
-        for msg in self.conversation_history:
-            role = msg["role"]
-            content = msg["content"]
-            
-            if role == "user":
-                prompt_parts.append(f"User: {content}")
-            elif role == "assistant":
-                prompt_parts.append(f"Assistant: {content}")
-        
-        return "\n\n".join(prompt_parts)
 
 
 if __name__ == "__main__":

@@ -2,5 +2,8 @@
   "name": "ollama",
   "description": "AI assistant powered by Ollama",
   "model": "llama3.1:8b",
-  "timeout": 120
+  "timeout": 120,
+  "base_url": "http://host.docker.internal:11434",
+  "model_endpoint": "/api/chat",
+  "test_endpoint": "/api/show"
 }
