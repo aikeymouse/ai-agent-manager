@@ -39,6 +39,7 @@ class BaseAgent:
         self.backend_port = os.getenv("BACKEND_PORT", "8000")
         self.websocket = None
         self.message_queue = asyncio.Queue()
+        self.conversation_history = []
         
     async def connect(self):
         """Connect to backend WebSocket"""
@@ -109,16 +110,15 @@ class BaseAgent:
         except Exception as e:
             pass  # Silently fail
     
-    async def stream_response(self, response_generator, save_to_history=None):
+    async def stream_response(self, response_generator):
         """
         Helper to handle streaming responses from LLM.
         
         Args:
             response_generator: Async generator that yields response chunks
-            save_to_history: Optional callback to save complete response (e.g., to conversation history)
             
         Returns:
-            Complete response string, or None if streaming was used
+            None (streaming handles sending and saving)
         """
         # Show typing indicator
         await self.send_typing(True)
@@ -132,9 +132,8 @@ class BaseAgent:
                     full_response += chunk
                     await self.send_message_stream(full_response)
             
-            # Save to history if callback provided
-            if save_to_history:
-                save_to_history(full_response)
+            # Add to conversation history
+            self.add_assistant_message(full_response)
             
             # Hide typing indicator (signals end of stream)
             await self.send_typing(False)
@@ -162,6 +161,37 @@ class BaseAgent:
             }))
         except Exception as e:
             pass  # Don't log typing errors
+    
+    def add_user_message(self, content: str):
+        """Add user message to conversation history"""
+        self.conversation_history.append({
+            "role": "user",
+            "content": content
+        })
+    
+    def add_system_message(self, content: str):
+        """Add system message to conversation history"""
+        self.conversation_history.append({
+            "role": "system",
+            "content": content
+        })
+    
+    def add_assistant_message(self, content: str):
+        """Add assistant message to conversation history"""
+        self.conversation_history.append({
+            "role": "assistant",
+            "content": content
+        })
+    
+    def get_history(self, max_messages=None):
+        """Get conversation history, optionally limited to recent messages"""
+        if max_messages:
+            return self.conversation_history[-max_messages:]
+        return self.conversation_history
+    
+    def clear_history(self):
+        """Clear conversation history"""
+        self.conversation_history = []
     
     async def send_heartbeat(self):
         """Send heartbeat to keep connection alive"""
@@ -241,12 +271,16 @@ class BaseAgent:
                     user_message = await self.receive_message()
                     
                     if user_message:
+                        # Add to conversation history
+                        self.add_user_message(user_message)
+                        
                         # Process message
                         response = await self.process_message(user_message)
                         
-                        # Send response
+                        # Send response and add to history if not None
                         if response:
                             await self.send_message(response)
+                            self.add_assistant_message(response)
                     
                     # Small delay to prevent tight loop
                     await asyncio.sleep(0.1)

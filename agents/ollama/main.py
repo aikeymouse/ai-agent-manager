@@ -22,7 +22,6 @@ class OllamaAgent(BaseAgent):
         self.model = config.get("model", "llama3.1:8b")
         self.timeout = config.get("timeout", 60)
         self.stream = config.get("stream", False)
-        self.conversation_history = []
     
     def _load_config(self):
         """Load configuration from agent_metadata.json"""
@@ -70,22 +69,10 @@ class OllamaAgent(BaseAgent):
         """Process incoming messages using Ollama chat API"""
         print(f"[{self.agent_name}] Processing message with Ollama chat API...")
         
-        # Add user message to history
-        self.conversation_history.append({
-            "role": "user",
-            "content": message
-        })
-        
         try:
             if self.stream:
-                # Use streaming with base agent helper
-                response = await self.stream_response(
-                    self._ollama_stream_generator(),
-                    save_to_history=lambda content: self.conversation_history.append({
-                        "role": "assistant",
-                        "content": content
-                    })
-                )
+                # Use streaming with base agent helper (handles history automatically)
+                response = await self.stream_response(self._ollama_stream_generator())
                 return response
             else:
                 # Non-streaming response
@@ -104,7 +91,7 @@ class OllamaAgent(BaseAgent):
                 f"{self.base_url}{self.model_endpoint}",
                 json={
                     "model": self.model,
-                    "messages": self.conversation_history,
+                    "messages": self.get_history(),
                     "stream": True
                 }
             ) as response:
@@ -131,7 +118,7 @@ class OllamaAgent(BaseAgent):
                 f"{self.base_url}{self.model_endpoint}",
                 json={
                     "model": self.model,
-                    "messages": self.conversation_history,
+                    "messages": self.get_history(),
                     "stream": False
                 }
             )
@@ -141,13 +128,6 @@ class OllamaAgent(BaseAgent):
             if response.status_code == 200:
                 result = response.json()
                 assistant_message = result["message"]["content"]
-                
-                # Add assistant response to history
-                self.conversation_history.append({
-                    "role": "assistant",
-                    "content": assistant_message
-                })
-                
                 return assistant_message
             else:
                 raise Exception(f"Ollama returned status {response.status_code}")
